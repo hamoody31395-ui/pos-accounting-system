@@ -1,0 +1,163 @@
+// ============================================
+// نظام كاشير وحسابات متكامل - POS & Accounting System
+// Database Schema Design
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// جدول المستخدمين - Users Table
+// يدعم 3 صلاحيات: مدير عام، كاشير، محاسب
+// ============================================
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  fullName  String
+  role      String   @default("cashier") // admin, cashier, accountant
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // العلاقات
+  sales     Sale[]
+  expenses  Expense[]
+  dayCloses DayClose[]
+}
+
+// ============================================
+// جدول التصنيفات - Categories Table
+// ============================================
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#6366f1")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // العلاقات
+  products Product[]
+}
+
+// ============================================
+// جدول المنتجات - Products Table
+// يتضمن معلومات المخزون والأسعار
+// ============================================
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  nameEn      String?                  // الاسم بالإنجليزية
+  barcode     String?                  // الباركود
+  categoryId  String?
+  costPrice   Float    @default(0)     // سعر التكلفة
+  sellPrice   Float                    // سعر البيع
+  quantity    Int      @default(0)     // الكمية في المخزون
+  minQuantity Int      @default(5)     // الحد الأدنى للتنبيه
+  unit        String   @default("قطعة") // وحدة القياس
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // العلاقات
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  saleItems   SaleItem[]
+}
+
+// ============================================
+// جدول المبيعات - Sales Table
+// ============================================
+model Sale {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique
+  userId        String
+  subtotal      Float    @default(0)   // المجموع قبل الضريبة والخصم
+  discount      Float    @default(0)   // الخصم
+  taxRate       Float    @default(15)  // نسبة الضريبة
+  taxAmount     Float    @default(0)   // قيمة الضريبة
+  totalCost     Float    @default(0)   // إجمالي التكلفة (لحساب الربح)
+  total         Float                    // الإجمالي النهائي
+  paymentMethod String   @default("cash") // cash, card, network
+  paidAmount    Float    @default(0)   // المبلغ المدفوع
+  changeAmount  Float    @default(0)   // الباقي
+  notes         String?                  // ملاحظات
+  isDeleted     Boolean  @default(false) // إلغاء/استرجاع
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // العلاقات
+  user          User      @relation(fields: [userId], references: [id])
+  items         SaleItem[]
+}
+
+// ============================================
+// جدول عناصر المبيعات - Sale Items Table
+// ============================================
+model SaleItem {
+  id         String  @id @default(cuid())
+  saleId     String
+  productId  String
+  productName String // نسخة من اسم المنتج لحفظ التاريخ
+  quantity   Int
+  price      Float   // سعر البيع في وقت البيع
+  costPrice  Float   // سعر التكلفة في وقت البيع
+  total      Float   // الإجمالي
+
+  // العلاقات
+  sale       Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product    Product @relation(fields: [productId], references: [id])
+}
+
+// ============================================
+// جدول المصروفات - Expenses Table
+// ============================================
+model Expense {
+  id          String   @id @default(cuid())
+  userId      String
+  category    String   // تصنيف المصروف (إيجار، كهرباء، صيانة...)
+  amount      Float
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // العلاقات
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+// ============================================
+// جدول إغلاق اليومية - Day Close Table
+// ============================================
+model DayClose {
+  id              String   @id @default(cuid())
+  userId          String
+  date            String   // تاريخ اليوم بصيغة YYYY-MM-DD
+  expectedCash    Float    @default(0)  // النقدية المتوقعة في الدرج
+  actualCash      Float    @default(0)  // النقدية الفعلية في الدرج
+  difference      Float    @default(0)  // الفرق
+  totalSales      Float    @default(0)  // إجمالي المبيعات
+  totalExpenses   Float    @default(0)  // إجمالي المصروفات
+  totalCardSales  Float    @default(0)  // مبيعات البطاقات
+  totalNetSales   Float    @default(0)  // مبيعات الشبكة
+  profit          Float    @default(0)  // صافي الربح
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // العلاقات
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+// ============================================
+// جدول إعدادات النظام - Settings Table
+// ============================================
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
